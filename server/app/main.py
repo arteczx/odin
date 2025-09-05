@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import uvicorn
 import os
 from pathlib import Path
@@ -9,6 +11,17 @@ from app.config import settings
 from app.database import engine, Base
 from app.routers import analysis, projects, websocket
 from app.models import models
+from app.utils.logging_config import setup_logging
+from app.utils.error_handlers import (
+    validation_exception_handler,
+    http_exception_handler,
+    general_exception_handler,
+    analysis_exception_handler,
+    AnalysisError
+)
+
+# Setup logging
+setup_logging()
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -18,6 +31,13 @@ app = FastAPI(
     description="Platform untuk analisis otomatis firmware dan attack surface reconnaissance",
     version="1.0.0"
 )
+
+# Add exception handlers
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(AnalysisError, analysis_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
 
 # CORS middleware
 app.add_middleware(
