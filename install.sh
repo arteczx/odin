@@ -227,23 +227,27 @@ setup_emba() {
     # Change into the EMBA directory
     cd "emba"
 
-    # Make EMBA executable if it exists
+    # Make EMBA components executable
     if [[ -f "emba" ]]; then
         chmod +x emba
     fi
+    # --- FIX: Make the installer executable ---
+    if [[ -f "installer.sh" ]]; then
+        chmod +x installer.sh
+    fi
 
     # Check if installer exists and run it with Docker mode
-    if [[ -f "installer.sh" ]]; then
+    if [[ -x "installer.sh" ]]; then # Check for execute permission now
         log_info "Running EMBA installer with Docker mode (-d flag)..."
         log_warning "This will download a large Docker image and requires significant disk space."
         sudo ./installer.sh -d
     else
-        log_error "EMBA installer.sh not found in ./emba/ directory"
-        log_info "Please ensure EMBA is properly cloned as a submodule."
+        log_error "EMBA installer.sh not found or is not executable in ./emba/ directory"
+        log_info "Please ensure EMBA is properly cloned and file permissions are correct."
         exit 1
     fi
 
-    # Create EMBA logs directory (this is a good practice, keeping it)
+    # Create EMBA logs directory
     sudo mkdir -p /tmp/emba_logs
     sudo chmod 777 /tmp/emba_logs
 
