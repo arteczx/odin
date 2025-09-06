@@ -106,9 +106,9 @@ setup-dirs:
 
 # Database helpers
 db-reset:
-	docker-compose down postgres
-	docker volume rm go-backend_postgres_data || true
-	docker-compose up -d postgres
+	@echo "Resetting SQLite database..."
+	rm -f odin.db
+	@echo "Database reset complete. It will be recreated on next server start."
 
 # Format code
 fmt:

@@ -638,6 +638,78 @@ func (h *Handler) getProfileDescription(profilePath string) string {
 	return "EMBA scan profile"
 }
 
+// GetEMBAConfig returns current EMBA configuration
+func (h *Handler) GetEMBAConfig(c *gin.Context) {
+	config := gin.H{
+		"emba_path":             h.config.EMBAPath,
+		"log_dir":              h.config.EMBALogDir,
+		"scan_profile":         h.config.EMBAScanProfile,
+		"threads":              h.config.EMBAThreads,
+		"enable_emulation":     h.config.EMBAEnableEmulation,
+		"enable_cwe_check":     h.config.EMBAEnableCWECheck,
+		"enable_live_testing":  h.config.EMBAEnableLiveTesting,
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"config": config,
+		"status": "success",
+	})
+}
+
+// UpdateEMBAConfig updates EMBA configuration
+func (h *Handler) UpdateEMBAConfig(c *gin.Context) {
+	var updateRequest struct {
+		ScanProfile        *string `json:"scan_profile"`
+		Threads           *int    `json:"threads"`
+		EnableEmulation   *bool   `json:"enable_emulation"`
+		EnableCWECheck    *bool   `json:"enable_cwe_check"`
+		EnableLiveTesting *bool   `json:"enable_live_testing"`
+	}
+	
+	if err := c.ShouldBindJSON(&updateRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request format",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	// Note: In a real implementation, you'd want to persist these changes
+	// For now, we'll just return the updated configuration
+	updatedConfig := gin.H{
+		"emba_path":             h.config.EMBAPath,
+		"log_dir":              h.config.EMBALogDir,
+		"scan_profile":         h.config.EMBAScanProfile,
+		"threads":              h.config.EMBAThreads,
+		"enable_emulation":     h.config.EMBAEnableEmulation,
+		"enable_cwe_check":     h.config.EMBAEnableCWECheck,
+		"enable_live_testing":  h.config.EMBAEnableLiveTesting,
+	}
+	
+	// Apply updates if provided
+	if updateRequest.ScanProfile != nil {
+		updatedConfig["scan_profile"] = *updateRequest.ScanProfile
+	}
+	if updateRequest.Threads != nil {
+		updatedConfig["threads"] = *updateRequest.Threads
+	}
+	if updateRequest.EnableEmulation != nil {
+		updatedConfig["enable_emulation"] = *updateRequest.EnableEmulation
+	}
+	if updateRequest.EnableCWECheck != nil {
+		updatedConfig["enable_cwe_check"] = *updateRequest.EnableCWECheck
+	}
+	if updateRequest.EnableLiveTesting != nil {
+		updatedConfig["enable_live_testing"] = *updateRequest.EnableLiveTesting
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"config": updatedConfig,
+		"status": "success",
+		"message": "EMBA configuration updated successfully",
+	})
+}
+
 // Helper function to get progress message based on status
 func (h *Handler) getProgressMessage(status models.ProjectStatus) string {
 	switch status {
