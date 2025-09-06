@@ -218,7 +218,7 @@ setup_emba() {
     log_info "Setting up EMBA..."
     
     # Get the absolute path to the script directory
-    SCRIPT_DIR="emba/"
+    SCRIPT_DIR="emba/emba"
     cd "$SCRIPT_DIR"
     
     if [[ ! -d "emba" ]]; then
