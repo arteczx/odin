@@ -226,7 +226,7 @@ Upload → Binwalk Extraction → Static Analysis → CVE Matching → OSINT →
 
 MIT License
 
-Copyright (c) 2024 Odin Firmware Intelligence
+Copyright (c) 2025 Odin Firmware Intelligence
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
