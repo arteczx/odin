@@ -217,10 +217,14 @@ install_emba_deps() {
 setup_emba() {
     log_info "Setting up EMBA..."
     
-    cd "$(dirname "$0")"
+    # Get the absolute path to the script directory
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    cd "$SCRIPT_DIR"
     
     if [[ ! -d "emba" ]]; then
         log_error "EMBA directory not found. Please ensure you're running this script from the ODIN project root."
+        log_error "Current directory: $(pwd)"
+        log_error "Looking for: $(pwd)/emba"
         exit 1
     fi
     
