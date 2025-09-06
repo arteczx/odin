@@ -1,0 +1,36 @@
+# Docker Compose for development dependencies only
+# EMBA runs natively on host system
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: odin-postgres
+    environment:
+      POSTGRES_DB: odin_db
+      POSTGRES_USER: odin_user
+      POSTGRES_PASSWORD: odin_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - odin-network
+
+  # Redis for job queue
+  redis:
+    image: redis:7-alpine
+    container_name: odin-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - odin-network
+
+volumes:
+  postgres_data:
+
+networks:
+  odin-network:
+    driver: bridge
