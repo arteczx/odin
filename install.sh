@@ -99,7 +99,7 @@ install_system_deps() {
     log_success "System dependencies installed"
 }
 
-# Install Docker
+# This function is kept in case it's needed for a non-EMBA setup, but is not called in main()
 install_docker() {
     log_info "Installing Docker..."
     
@@ -197,12 +197,11 @@ install_go() {
 
 # Install minimal EMBA dependencies (EMBA installer will handle the rest)
 install_emba_deps() {
-    log_info "Installing minimal EMBA dependencies..."
+    log_info "Installing minimal EMBA dependencies (excluding Docker)..."
     
     # Only install essential system dependencies that EMBA installer requires
+    # Docker is handled by the EMBA installer itself
     sudo apt install -y \
-        docker.io \
-        docker-compose \
         python3 \
         python3-pip \
         git \
@@ -210,7 +209,7 @@ install_emba_deps() {
         wget
     
     log_success "Minimal EMBA dependencies installed"
-    log_info "EMBA installer will handle additional dependencies automatically"
+    log_info "EMBA installer will handle additional dependencies (like Docker) automatically"
 }
 
 # Setup EMBA
@@ -231,13 +230,12 @@ setup_emba() {
     if [[ -f "emba" ]]; then
         chmod +x emba
     fi
-    # --- FIX: Make the installer executable ---
     if [[ -f "installer.sh" ]]; then
         chmod +x installer.sh
     fi
 
     # Check if installer exists and run it with Docker mode
-    if [[ -x "installer.sh" ]]; then # Check for execute permission now
+    if [[ -x "installer.sh" ]]; then # Check for execute permission
         log_info "Running EMBA installer with Docker mode (-d flag)..."
         log_warning "This will download a large Docker image and requires significant disk space."
         sudo ./installer.sh -d
@@ -382,7 +380,8 @@ main() {
     # System setup
     update_system
     install_system_deps
-    install_docker
+    # --- FIX: Docker installation is now handled by EMBA installer ---
+    # install_docker
     
     # Development tools
     install_nodejs
@@ -405,7 +404,7 @@ main() {
     echo "🚀 ODIN is ready to use!"
     echo ""
     echo "Quick start:"
-    echo "1. Log out and back in (for Docker group changes)"
+    echo "1. Log out and back in (for Docker group changes if any were made by EMBA)"
     echo "2. Start the services: ./run.sh"
     echo "3. Open your browser: http://localhost:3000"
     echo ""
