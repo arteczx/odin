@@ -160,8 +160,8 @@ func (h *Handler) UploadFirmware(c *gin.Context) {
 		DeviceModel: c.Request.FormValue("device_model"),
 		DeviceVersion: c.Request.FormValue("device_version"),
 		Manufacturer: c.Request.FormValue("manufacturer"),
-		FirmwareInfo: make(map[string]interface{}),
-		ExtractionResults: make(map[string]interface{}),
+		FirmwareInfo: "{}",
+		ExtractionResults: "{}",
 	}
 
 	// Save project to database

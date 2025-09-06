@@ -65,8 +65,8 @@ type Project struct {
 	Manufacturer  string `json:"manufacturer"`
 
 	// Analysis results (JSON fields)
-	FirmwareInfo      map[string]interface{} `gorm:"type:json" json:"firmware_info"`
-	ExtractionResults map[string]interface{} `gorm:"type:json" json:"extraction_results"`
+	FirmwareInfo      string `gorm:"type:text" json:"firmware_info"`
+	ExtractionResults string `gorm:"type:text" json:"extraction_results"`
 
 	// Timestamps
 	CreatedAt   time.Time  `json:"created_at"`
@@ -101,9 +101,9 @@ type Finding struct {
 	LineNumber int    `json:"line_number"`
 
 	// Finding data
-	Content         string                 `json:"content"`
-	Context         string                 `json:"context"`
-	FindingMetadata map[string]interface{} `gorm:"type:json" json:"finding_metadata"`
+	Content         string `json:"content"`
+	Context         string `json:"context"`
+	FindingMetadata string `gorm:"type:text" json:"finding_metadata"`
 
 	CreatedAt time.Time `json:"created_at"`
 
@@ -126,7 +126,7 @@ type CVEFinding struct {
 	SeverityLevel RiskLevel `json:"severity_level"`
 
 	// References (JSON array)
-	References []string `gorm:"type:json" json:"references"`
+	References string `gorm:"type:text" json:"references"`
 
 	CreatedAt time.Time `json:"created_at"`
 
@@ -143,10 +143,10 @@ type OSINTResult struct {
 	Query  string `gorm:"not null" json:"query"`
 
 	// Results
-	Title       string                 `json:"title"`
-	Description string                 `json:"description"`
-	URL         string                 `json:"url"`
-	Data        map[string]interface{} `gorm:"type:json" json:"data"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	URL         string `json:"url"`
+	Data        string `gorm:"type:text" json:"data"`
 
 	// Relevance scoring
 	ConfidenceScore int `gorm:"default:0" json:"confidence_score"` // 0-100
