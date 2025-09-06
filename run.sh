@@ -243,7 +243,11 @@ health_check() {
         log_info "ℹ️  SQLite database will be created on first backend start"
     fi
     
-    return $all_healthy
+    if $all_healthy; then
+        return 0
+    else
+        return 1
+    fi
 }
 
 # Display service status
