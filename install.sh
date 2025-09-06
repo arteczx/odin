@@ -216,38 +216,38 @@ install_emba_deps() {
 # Setup EMBA
 setup_emba() {
     log_info "Setting up EMBA..."
-    
-    # Get the absolute path to the script directory
-    SCRIPT_DIR="emba/emba"
-    cd "$SCRIPT_DIR"
-    
+
+    # Check if the emba directory exists in the current path
     if [[ ! -d "emba" ]]; then
         log_error "EMBA directory not found. Please ensure you're running this script from the ODIN project root."
         log_error "Current directory: $(pwd)"
-        log_error "Looking for: $(pwd)/emba"
         exit 1
     fi
-    
-    cd emba
-    
-    # Make EMBA executable
-    chmod +x emba
-    
+
+    # Change into the EMBA directory
+    cd "emba"
+
+    # Make EMBA executable if it exists
+    if [[ -f "emba" ]]; then
+        chmod +x emba
+    fi
+
     # Check if installer exists and run it with Docker mode
     if [[ -f "installer.sh" ]]; then
         log_info "Running EMBA installer with Docker mode (-d flag)..."
-        log_warning "This will download ~6GB Docker image and requires ~14GB disk space"
+        log_warning "This will download a large Docker image and requires significant disk space."
         sudo ./installer.sh -d
     else
         log_error "EMBA installer.sh not found in ./emba/ directory"
-        log_info "Please ensure EMBA is properly cloned with: git clone https://github.com/e-m-b-a/emba.git"
+        log_info "Please ensure EMBA is properly cloned as a submodule."
         exit 1
     fi
-    
-    # Create EMBA logs directory
+
+    # Create EMBA logs directory (this is a good practice, keeping it)
     sudo mkdir -p /tmp/emba_logs
     sudo chmod 777 /tmp/emba_logs
-    
+
+    # IMPORTANT: Return to the project root directory
     cd ..
     log_success "EMBA setup completed with Docker environment"
 }
