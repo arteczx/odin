@@ -115,7 +115,7 @@ stop_services() {
     
     # Kill any remaining processes
     pkill -f "npm start" 2>/dev/null || true
-    pkill -f "./bin/server" 2>/dev/null || true
+    pkill -f "./build/server" 2>/dev/null || true
     pkill -f "go run.*server" 2>/dev/null || true
     
     sleep 2
@@ -147,7 +147,7 @@ start_backend() {
     cd go-backend
     
     # Check if binary exists
-    if [[ ! -f "bin/server" ]]; then
+    if [[ ! -f "build/server" ]]; then
         log_info "Backend binary not found, building..."
         make build
     fi
@@ -160,7 +160,7 @@ start_backend() {
     
     # Start backend
     log_info "Starting backend server on port $BACKEND_PORT..."
-    nohup ./bin/server > /tmp/odin_backend.log 2>&1 &
+    nohup ./build/server > /tmp/odin_backend.log 2>&1 &
     local backend_pid=$!
     echo $backend_pid > "$BACKEND_PID_FILE"
     

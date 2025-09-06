@@ -77,7 +77,7 @@ fi
 # Kill any remaining processes
 log_info "Cleaning up remaining processes..."
 pkill -f "npm start" 2>/dev/null || true
-pkill -f "./bin/server" 2>/dev/null || true
+pkill -f "./build/server" 2>/dev/null || true
 pkill -f "go run.*server" 2>/dev/null || true
 pkill -f "react-scripts start" 2>/dev/null || true
 
