@@ -13,8 +13,6 @@ NC='\033[0m' # No Color
 # Configuration
 BACKEND_PORT=8080
 FRONTEND_PORT=3000
-POSTGRES_PORT=5432
-REDIS_PORT=6379
 
 # PID file locations
 BACKEND_PID_FILE="/tmp/odin_backend.pid"
@@ -117,36 +115,20 @@ fi
 
 echo ""
 
-# System Services Status
-echo -e "${CYAN}🗄️  System Services:${NC}"
+# Database Status
+echo -e "${CYAN}🗄️  Database:${NC}"
 echo "----------------------------------------"
 
-# PostgreSQL Status
-echo -n "PostgreSQL:         "
-if systemctl is-active --quiet postgresql; then
-    echo -e "${GREEN}Running${NC}"
-    echo -n "  Health Check:     "
-    if pg_isready -p $POSTGRES_PORT > /dev/null 2>&1; then
-        echo -e "${GREEN}✅ Healthy${NC}"
-    else
-        echo -e "${RED}❌ Unhealthy${NC}"
-    fi
+# SQLite Status
+echo -n "SQLite Database:    "
+if [[ -f "go-backend/odin.db" ]]; then
+    echo -e "${GREEN}Available${NC}"
+    # Check database size
+    db_size=$(du -h "go-backend/odin.db" 2>/dev/null | cut -f1)
+    echo "  Database Size:    ${BLUE}${db_size:-"Unknown"}${NC}"
 else
-    echo -e "${RED}Stopped${NC}"
-fi
-
-# Redis Status
-echo -n "Redis:              "
-if systemctl is-active --quiet redis-server; then
-    echo -e "${GREEN}Running${NC}"
-    echo -n "  Health Check:     "
-    if redis-cli -p $REDIS_PORT ping > /dev/null 2>&1; then
-        echo -e "${GREEN}✅ Healthy${NC}"
-    else
-        echo -e "${RED}❌ Unhealthy${NC}"
-    fi
-else
-    echo -e "${RED}Stopped${NC}"
+    echo -e "${YELLOW}Not Created Yet${NC}"
+    echo "  Status:           ${BLUE}Will be created on first backend start${NC}"
 fi
 
 echo ""

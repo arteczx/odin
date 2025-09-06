@@ -16,8 +16,6 @@ NC='\033[0m' # No Color
 # Configuration
 BACKEND_PORT=8080
 FRONTEND_PORT=3000
-POSTGRES_PORT=5432
-REDIS_PORT=6379
 MAX_WAIT_TIME=60
 HEALTH_CHECK_INTERVAL=5
 
@@ -124,35 +122,22 @@ stop_services() {
     log_success "Existing services stopped"
 }
 
-# Start system services
-start_system_services() {
-    log_step "Starting system services..."
+# Setup required directories and check SQLite
+setup_environment() {
+    log_step "Setting up environment..."
     
-    # Start PostgreSQL
-    if ! systemctl is-active --quiet postgresql; then
-        log_info "Starting PostgreSQL..."
-        sudo systemctl start postgresql
-        if ! wait_for_service "PostgreSQL" $POSTGRES_PORT 30; then
-            log_error "Failed to start PostgreSQL"
-            exit 1
-        fi
+    # Create required directories
+    mkdir -p go-backend/uploads go-backend/work go-backend/logs
+    mkdir -p /tmp/odin/uploads /tmp/odin/work /tmp/emba_logs
+    
+    # Check if SQLite database exists, create if needed
+    if [[ ! -f "go-backend/odin.db" ]]; then
+        log_info "SQLite database will be created on first run"
     else
-        log_info "PostgreSQL is already running"
+        log_info "SQLite database found"
     fi
     
-    # Start Redis
-    if ! systemctl is-active --quiet redis-server; then
-        log_info "Starting Redis..."
-        sudo systemctl start redis-server
-        if ! wait_for_service "Redis" $REDIS_PORT 30; then
-            log_error "Failed to start Redis"
-            exit 1
-        fi
-    else
-        log_info "Redis is already running"
-    fi
-    
-    log_success "System services are ready"
+    log_success "Environment setup complete"
 }
 
 # Start Go backend
@@ -251,20 +236,11 @@ health_check() {
         all_healthy=false
     fi
     
-    # Check PostgreSQL
-    if pg_isready -p $POSTGRES_PORT > /dev/null 2>&1; then
-        log_success "✅ PostgreSQL is healthy"
+    # Check SQLite database
+    if [[ -f "go-backend/odin.db" ]]; then
+        log_success "✅ SQLite database is available"
     else
-        log_warning "⚠️  PostgreSQL health check failed"
-        all_healthy=false
-    fi
-    
-    # Check Redis
-    if redis-cli -p $REDIS_PORT ping > /dev/null 2>&1; then
-        log_success "✅ Redis is healthy"
-    else
-        log_warning "⚠️  Redis health check failed"
-        all_healthy=false
+        log_info "ℹ️  SQLite database will be created on first backend start"
     fi
     
     return $all_healthy
@@ -340,8 +316,8 @@ main() {
     # Stop any existing services
     stop_services
     
-    # Start system services
-    start_system_services
+    # Setup environment
+    setup_environment
     
     # Start application services
     start_backend
