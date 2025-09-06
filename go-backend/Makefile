@@ -85,11 +85,24 @@ docker-logs:
 	docker-compose logs -f
 
 # Development helpers
-dev-server: 
+dev-server: setup-dirs
+	@echo "Starting ODIN server..."
+	@echo "Config: Loading from .env file"
+	@echo "Database: SQLite (./odin.db)"
+	@echo "Server will be available at: http://localhost:8080"
 	$(GOCMD) run ./cmd/server
 
-dev-worker:
+dev-worker: setup-dirs
+	@echo "Starting ODIN worker..."
+	@echo "Config: Loading from .env file"
+	@echo "Database: SQLite (./odin.db)"
+	@echo "Worker will poll for pending analysis jobs every 10 seconds"
 	$(GOCMD) run ./cmd/worker
+
+# Setup required directories
+setup-dirs:
+	@mkdir -p uploads work logs /tmp/odin/uploads /tmp/odin/work /tmp/emba_logs
+	@echo "Created required directories"
 
 # Database helpers
 db-reset:

@@ -1,17 +1,13 @@
 package worker
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"odin-backend/internal/config"
 	"odin-backend/internal/emba"
 	"odin-backend/internal/models"
-	"odin-backend/internal/queue"
 	"time"
 
-	"github.com/hibiken/asynq"
 	"gorm.io/gorm"
 )
 
@@ -30,59 +26,68 @@ func New(db *gorm.DB, cfg *config.Config) *Worker {
 	}
 }
 
-// HandleAnalyzeFirmware processes firmware analysis tasks
-func (w *Worker) HandleAnalyzeFirmware(ctx context.Context, t *asynq.Task) error {
-	var payload queue.AnalyzeFirmwarePayload
-	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
-		return fmt.Errorf("failed to unmarshal payload: %w", err)
+// ProcessPendingJobs polls for pending analysis jobs and processes them
+func (w *Worker) ProcessPendingJobs() error {
+	var projects []models.Project
+	
+	// Find projects that are pending analysis
+	if err := w.db.Where("status = ?", models.StatusPending).Find(&projects).Error; err != nil {
+		return fmt.Errorf("failed to query pending projects: %w", err)
 	}
 
-	log.Printf("Starting firmware analysis for job %s", payload.JobID)
-
-	// Get project from database
-	var project models.Project
-	if err := w.db.First(&project, "id = ?", payload.ProjectID).Error; err != nil {
-		return fmt.Errorf("failed to find project: %w", err)
+	for _, project := range projects {
+		log.Printf("Processing pending project: %s (ID: %d)", project.Name, project.ID)
+		if err := w.processProject(&project); err != nil {
+			log.Printf("Failed to process project %d: %v", project.ID, err)
+			w.updateProjectStatus(&project, models.StatusFailed, fmt.Sprintf("Processing failed: %v", err))
+		}
 	}
+
+	return nil
+}
+
+// processProject processes a single firmware analysis project
+func (w *Worker) processProject(project *models.Project) error {
+	log.Printf("Starting firmware analysis for project %s", project.Name)
 
 	// Update status to analyzing
-	if err := w.updateProjectStatus(&project, models.StatusAnalyzing, "Running EMBA firmware analysis..."); err != nil {
+	if err := w.updateProjectStatus(project, models.StatusAnalyzing, "Running EMBA firmware analysis..."); err != nil {
 		return fmt.Errorf("failed to update project status: %w", err)
 	}
 
 	// Run EMBA analysis
-	result, err := w.emba.AnalyzeFirmware(payload.FilePath, payload.JobID)
+	result, err := w.emba.AnalyzeFirmware(project.FilePath, fmt.Sprintf("job_%d", project.ID))
 	if err != nil {
-		log.Printf("EMBA analysis failed for job %s: %v", payload.JobID, err)
-		w.updateProjectStatus(&project, models.StatusFailed, fmt.Sprintf("EMBA analysis failed: %v", err))
+		log.Printf("EMBA analysis failed for project %s: %v", project.Name, err)
+		w.updateProjectStatus(project, models.StatusFailed, fmt.Sprintf("EMBA analysis failed: %v", err))
 		return fmt.Errorf("EMBA analysis failed: %w", err)
 	}
 
 	if !result.Success {
-		log.Printf("EMBA analysis unsuccessful for job %s: %s", payload.JobID, result.Error)
-		w.updateProjectStatus(&project, models.StatusFailed, fmt.Sprintf("EMBA analysis failed: %s", result.Error))
+		log.Printf("EMBA analysis unsuccessful for project %s: %s", project.Name, result.Error)
+		w.updateProjectStatus(project, models.StatusFailed, fmt.Sprintf("EMBA analysis failed: %s", result.Error))
 		return fmt.Errorf("EMBA analysis failed: %s", result.Error)
 	}
 
 	// Parse and save EMBA results
-	if err := w.saveAnalysisResults(&project, result); err != nil {
-		log.Printf("Failed to save analysis results for job %s: %v", payload.JobID, err)
-		w.updateProjectStatus(&project, models.StatusFailed, fmt.Sprintf("Failed to save results: %v", err))
+	if err := w.saveAnalysisResults(project, result); err != nil {
+		log.Printf("Failed to save analysis results for project %s: %v", project.Name, err)
+		w.updateProjectStatus(project, models.StatusFailed, fmt.Sprintf("Failed to save results: %v", err))
 		return fmt.Errorf("failed to save analysis results: %w", err)
 	}
 
 	// Calculate risk level
-	riskLevel := w.calculateRiskLevel(&project)
+	riskLevel := w.calculateRiskLevel(project)
 	project.RiskLevel = riskLevel
 
 	// Mark as completed
 	now := time.Now()
 	project.CompletedAt = &now
-	if err := w.updateProjectStatus(&project, models.StatusCompleted, "EMBA analysis completed successfully"); err != nil {
+	if err := w.updateProjectStatus(project, models.StatusCompleted, "EMBA analysis completed successfully"); err != nil {
 		return fmt.Errorf("failed to update completion status: %w", err)
 	}
 
-	log.Printf("EMBA analysis completed successfully for job %s", payload.JobID)
+	log.Printf("EMBA analysis completed successfully for project %s", project.Name)
 	return nil
 }
 
