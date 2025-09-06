@@ -436,7 +436,8 @@ func (h *Handler) GetEMBAReport(c *gin.Context) {
 					// Try alternative paths
 					reportPath = filepath.Join(logDir, "report.html")
 					if _, err := os.Stat(reportPath); os.IsNotExist(err) {
-					reportPath = ""
+						reportPath = ""
+					}
 				}
 			}
 		}
