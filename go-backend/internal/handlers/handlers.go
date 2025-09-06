@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -424,14 +425,17 @@ func (h *Handler) GetEMBAReport(c *gin.Context) {
 
 	// Check for EMBA report in extraction results
 	reportPath := ""
-	if project.ExtractionResults != nil {
-		if logDir, ok := project.ExtractionResults["emba_log_dir"].(string); ok {
-			// Look for HTML report files
-			reportPath = filepath.Join(logDir, "html-report", "index.html")
-			if _, err := os.Stat(reportPath); os.IsNotExist(err) {
-				// Try alternative paths
-				reportPath = filepath.Join(logDir, "report.html")
+	if project.ExtractionResults != "" && project.ExtractionResults != "{}" {
+		// Parse JSON string to get log directory
+		var extractionData map[string]interface{}
+		if err := json.Unmarshal([]byte(project.ExtractionResults), &extractionData); err == nil {
+			if logDir, ok := extractionData["emba_log_dir"].(string); ok {
+				// Look for HTML report files
+				reportPath = filepath.Join(logDir, "html-report", "index.html")
 				if _, err := os.Stat(reportPath); os.IsNotExist(err) {
+					// Try alternative paths
+					reportPath = filepath.Join(logDir, "report.html")
+					if _, err := os.Stat(reportPath); os.IsNotExist(err) {
 					reportPath = ""
 				}
 			}
@@ -513,9 +517,13 @@ func (h *Handler) GetEMBALogs(c *gin.Context) {
 
 	// Get log directory from extraction results
 	logDir := ""
-	if project.ExtractionResults != nil {
-		if dir, ok := project.ExtractionResults["emba_log_dir"].(string); ok {
-			logDir = dir
+	if project.ExtractionResults != "" && project.ExtractionResults != "{}" {
+		// Parse JSON string to get log directory
+		var extractionData map[string]interface{}
+		if err := json.Unmarshal([]byte(project.ExtractionResults), &extractionData); err == nil {
+			if dir, ok := extractionData["emba_log_dir"].(string); ok {
+				logDir = dir
+			}
 		}
 	}
 
