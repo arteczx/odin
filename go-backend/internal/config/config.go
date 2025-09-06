@@ -10,10 +10,7 @@ import (
 
 type Config struct {
 	// Database
-	DatabaseURL string
-
-	// Redis
-	RedisURL string
+	DatabasePath string
 
 	// Server
 	ServerHost string
@@ -44,8 +41,7 @@ func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	cfg := &Config{
-		DatabaseURL:         getEnv("DATABASE_URL", "postgres://user:password@localhost:5432/odin_db?sslmode=disable"),
-		RedisURL:           getEnv("REDIS_URL", "redis://localhost:6379/0"),
+		DatabasePath:        getEnv("DATABASE_PATH", "./odin.db"),
 		ServerHost:         getEnv("SERVER_HOST", "0.0.0.0"),
 		ServerPort:         getEnv("SERVER_PORT", "8080"),
 		UploadDir:          getEnv("UPLOAD_DIR", "/tmp/odin/uploads"),

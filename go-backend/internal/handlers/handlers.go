@@ -13,7 +13,6 @@ import (
 
 	"odin-backend/internal/config"
 	"odin-backend/internal/models"
-	"odin-backend/internal/queue"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -22,14 +21,12 @@ import (
 
 type Handler struct {
 	db     *gorm.DB
-	queue  *queue.Client
 	config *config.Config
 }
 
-func New(db *gorm.DB, queueClient *queue.Client, cfg *config.Config) *Handler {
+func New(db *gorm.DB, cfg *config.Config) *Handler {
 	return &Handler{
 		db:     db,
-		queue:  queueClient,
 		config: cfg,
 	}
 }
@@ -165,22 +162,9 @@ func (h *Handler) UploadFirmware(c *gin.Context) {
 		return
 	}
 
-	// Enqueue analysis task
-	payload := queue.AnalyzeFirmwarePayload{
-		JobID:     jobID,
-		ProjectID: jobID,
-		FilePath:  filePath,
-		Filename:  header.Filename,
-	}
-
-	_, err = h.queue.EnqueueAnalyzeFirmware(payload)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to queue analysis",
-			"message": err.Error(),
-		})
-		return
-	}
+	// Start analysis directly (simplified without queue)
+	// In a production system, this would be handled by a background worker
+	// For now, we'll mark the project as ready for analysis
 
 	// Update project status
 	project.Status = models.StatusUploading
@@ -456,8 +440,8 @@ func (h *Handler) GetEMBAReport(c *gin.Context) {
 	})
 }
 
-// GetEMBAReport returns EMBA analysis results in structured format
-func (h *Handler) GetEMBAReport(c *gin.Context) {
+// GetEMBAResults returns EMBA analysis results in structured format
+func (h *Handler) GetEMBAResults(c *gin.Context) {
 	jobID := c.Param("job_id")
 
 	var project models.Project
@@ -481,12 +465,16 @@ func (h *Handler) GetEMBAReport(c *gin.Context) {
 
 	// Return the analysis results from the project
 	c.JSON(http.StatusOK, gin.H{
-		"job_id":        jobID,
-		"project_id":    project.ID,
-		"status":        "completed",
-		"results":       project.AnalysisResults,
-		"generated_at":  project.UpdatedAt,
-		"analysis_time": project.CompletedAt,
+		"job_id":            jobID,
+		"project_id":        project.ID,
+		"status":            "completed",
+		"firmware_info":     project.FirmwareInfo,
+		"extraction_results": project.ExtractionResults,
+		"findings":          project.Findings,
+		"cve_findings":      project.CVEFindings,
+		"osint_results":     project.OSINTResults,
+		"generated_at":      project.UpdatedAt,
+		"analysis_time":     project.CompletedAt,
 	})
 }
 

@@ -6,7 +6,6 @@ import (
 	"odin-backend/internal/database"
 	"odin-backend/internal/handlers"
 	"odin-backend/internal/middleware"
-	"odin-backend/internal/queue"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,19 +18,13 @@ func main() {
 	}
 
 	// Initialize database
-	db, err := database.Initialize(cfg.DatabaseURL)
+	db, err := database.Initialize(cfg.DatabasePath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	// Initialize queue client
-	queueClient, err := queue.NewClient(cfg.RedisURL)
-	if err != nil {
-		log.Fatalf("Failed to initialize queue client: %v", err)
-	}
-
 	// Initialize handlers
-	h := handlers.New(db, queueClient, cfg)
+	h := handlers.New(db, cfg)
 
 	// Setup Gin router
 	r := gin.Default()

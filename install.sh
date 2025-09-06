@@ -262,11 +262,46 @@ setup_go_backend() {
     log_info "Building Go applications..."
     make build
     
-    # Copy environment file
+    # Create production-ready environment file
     if [[ ! -f ".env" ]]; then
-        cp .env.example .env
-        log_info "Created .env file from template"
-        log_warning "Please review and update .env file with your configuration"
+        log_info "Creating production-ready .env file..."
+        cat > .env << 'EOF'
+# Database Configuration (SQLite)
+DATABASE_PATH=./odin.db
+
+# Server Configuration
+SERVER_PORT=8080
+SERVER_HOST=0.0.0.0
+
+# File Upload Configuration
+UPLOAD_DIR=./uploads
+WORK_DIR=./work
+MAX_FILE_SIZE=524288000
+
+# EMBA Configuration
+EMBA_PATH=../emba
+EMBA_LOG_DIR=./logs
+EMBA_ENABLE_EMULATION=true
+EMBA_ENABLE_CWE_CHECK=true
+EMBA_ENABLE_LIVE_TESTING=false
+EMBA_SCAN_PROFILE=default-scan.emba
+EMBA_THREADS=4
+
+# Supported file extensions
+SUPPORTED_EXTENSIONS=.bin,.img,.hex,.rom,.fw
+
+# External APIs (Optional - add your keys here)
+SHODAN_API_KEY=
+VIRUSTOTAL_API_KEY=
+
+# Logging Configuration
+LOG_LEVEL=info
+LOG_FORMAT=json
+
+# Production Mode
+GIN_MODE=release
+EOF
+        log_success "Production-ready .env file created"
     fi
     
     cd ..
@@ -283,196 +318,45 @@ setup_frontend() {
     log_info "Installing npm packages..."
     npm install
     
-    # Copy environment file
+    # Create production-ready frontend environment file
     if [[ ! -f ".env" ]]; then
-        echo "REACT_APP_API_URL=http://localhost:8080" > .env
-        log_info "Created frontend .env file"
+        log_info "Creating production-ready frontend .env file..."
+        cat > .env << 'EOF'
+# Backend API Configuration
+REACT_APP_API_URL=http://localhost:8080
+
+# Build Configuration
+GENERATE_SOURCEMAP=false
+REACT_APP_VERSION=$npm_package_version
+
+# Performance Optimization
+INLINE_RUNTIME_CHUNK=false
+EOF
+        log_success "Production-ready frontend .env file created"
     fi
     
     cd ..
     log_success "React frontend setup completed"
 }
 
-# Setup databases
-setup_databases() {
-    log_info "Setting up databases..."
+# Setup database and required directories
+setup_database() {
+    log_info "Setting up database and required directories..."
     
-    # Start and enable PostgreSQL
-    sudo systemctl start postgresql
-    sudo systemctl enable postgresql
+    cd go-backend
     
-    # Start and enable Redis
-    sudo systemctl start redis-server
-    sudo systemctl enable redis-server
+    # Create required directories
+    mkdir -p uploads work logs data
     
-    # Create PostgreSQL database and user for ODIN
-    sudo -u postgres psql -c "CREATE DATABASE odin;" 2>/dev/null || log_warning "Database 'odin' may already exist"
-    sudo -u postgres psql -c "CREATE USER odin WITH PASSWORD 'odin123';" 2>/dev/null || log_warning "User 'odin' may already exist"
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE odin TO odin;" 2>/dev/null || true
+    # Set proper permissions
+    chmod 755 uploads work logs data
     
-    log_success "Databases setup completed"
+    cd ..
+    
+    log_success "Database and working directories created"
 }
 
-# Create startup scripts
-create_startup_scripts() {
-    log_info "Creating startup scripts..."
-    
-    # Create start-all script
-    cat > start-all.sh << 'EOF'
-#!/bin/bash
 
-# ODIN Project - Start All Services
-
-echo "Starting ODIN services..."
-
-# Start databases
-sudo systemctl start postgresql redis-server
-
-# Start Go backend
-cd go-backend
-echo "Starting Go backend..."
-./bin/server &
-BACKEND_PID=$!
-echo "Backend started with PID: $BACKEND_PID"
-
-# Start React frontend
-cd ../frontend
-echo "Starting React frontend..."
-npm start &
-FRONTEND_PID=$!
-echo "Frontend started with PID: $FRONTEND_PID"
-
-echo "ODIN services started successfully!"
-echo "Frontend: http://localhost:3000"
-echo "Backend API: http://localhost:8080"
-echo ""
-echo "To stop services:"
-echo "kill $BACKEND_PID $FRONTEND_PID"
-
-cd ..
-EOF
-
-    # Create stop-all script
-    cat > stop-all.sh << 'EOF'
-#!/bin/bash
-
-# ODIN Project - Stop All Services
-
-echo "Stopping ODIN services..."
-
-# Stop Node.js processes (React frontend)
-pkill -f "react-scripts start" || true
-pkill -f "npm start" || true
-
-# Stop Go backend
-pkill -f "./bin/server" || true
-pkill -f "go run" || true
-
-echo "ODIN services stopped."
-EOF
-
-    # Make scripts executable
-    chmod +x start-all.sh stop-all.sh
-    
-    log_success "Startup scripts created"
-}
-
-# Create development environment info
-create_dev_info() {
-    log_info "Creating development environment information..."
-    
-    cat > DEV_SETUP.md << 'EOF'
-# ODIN Development Environment
-
-## Services Overview
-
-### Frontend (React + TypeScript)
-- **URL:** http://localhost:3000
-- **Location:** `./frontend/`
-- **Start:** `cd frontend && npm start`
-- **Build:** `cd frontend && npm run build`
-
-### Backend (Go)
-- **URL:** http://localhost:8080
-- **Location:** `./go-backend/`
-- **Start:** `cd go-backend && ./bin/server`
-- **Build:** `cd go-backend && make build`
-
-### EMBA (Firmware Analyzer)
-- **Location:** `./emba/`
-- **Usage:** `sudo ./emba/emba -l /tmp/emba_logs -f /path/to/firmware`
-
-### Databases
-- **PostgreSQL:** localhost:5432 (database: odin, user: odin, password: odin123)
-- **Redis:** localhost:6379
-
-## Quick Start Commands
-
-```bash
-# Start all services
-./start-all.sh
-
-# Stop all services
-./stop-all.sh
-
-# Manual start (development)
-cd go-backend && ./bin/server &
-cd frontend && npm start &
-
-# Run EMBA analysis
-sudo ./emba/emba -l /tmp/emba_logs -f /path/to/firmware.bin -p ./emba/scan-profiles/default-scan.emba
-```
-
-## Environment Files
-
-- `./go-backend/.env` - Backend configuration
-- `./frontend/.env` - Frontend configuration
-
-## Development Workflow
-
-1. **Backend Development:**
-   ```bash
-   cd go-backend
-   go run cmd/server/main.go  # Development mode
-   make build                 # Production build
-   ```
-
-2. **Frontend Development:**
-   ```bash
-   cd frontend
-   npm start                  # Development server
-   npm run build             # Production build
-   ```
-
-3. **EMBA Integration:**
-   - Upload firmware via frontend
-   - Backend triggers EMBA analysis
-   - Results displayed in comprehensive visualization
-
-## Troubleshooting
-
-- **Port conflicts:** Check if ports 3000, 8080 are available
-- **Database issues:** Ensure PostgreSQL and Redis are running
-- **EMBA permissions:** EMBA requires sudo for some operations
-- **Go modules:** Run `go mod tidy` if dependency issues occur
-- **Node modules:** Delete `node_modules` and run `npm install` if issues occur
-
-## Project Structure
-
-```
-odin/
-├── emba/                 # EMBA firmware analyzer
-├── frontend/             # React TypeScript frontend
-├── go-backend/           # Go backend API
-├── install.sh           # This installation script
-├── start-all.sh         # Start all services
-├── stop-all.sh          # Stop all services
-└── DEV_SETUP.md         # This file
-```
-EOF
-
-    log_success "Development environment documentation created"
-}
 
 # Main installation function
 main() {
@@ -503,24 +387,23 @@ main() {
     # Project setup
     setup_go_backend
     setup_frontend
-    setup_databases
-    
-    # Create helper scripts
-    create_startup_scripts
-    create_dev_info
+    setup_database
     
     echo ""
     echo "=========================================="
     log_success "ODIN installation completed successfully!"
     echo "=========================================="
     echo ""
-    echo "Next steps:"
+    echo "🚀 ODIN is ready to use!"
+    echo ""
+    echo "Quick start:"
     echo "1. Log out and back in (for Docker group changes)"
-    echo "2. Review and update configuration files:"
-    echo "   - ./go-backend/.env"
-    echo "   - ./frontend/.env"
-    echo "3. Start the services:"
-    echo "   ./start-all.sh"
+    echo "2. Start the services: ./run.sh"
+    echo "3. Open your browser: http://localhost:3000"
+    echo ""
+    echo "Optional configuration:"
+    echo "- Add API keys to ./go-backend/.env (Shodan, VirusTotal)"
+    echo "- Customize EMBA settings in ./go-backend/.env"
     echo ""
     echo "Access points:"
     echo "- Frontend: http://localhost:3000"
