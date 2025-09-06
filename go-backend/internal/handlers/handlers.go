@@ -42,9 +42,14 @@ func (h *Handler) HealthCheck(c *gin.Context) {
 
 // UploadFirmware handles firmware file upload and starts analysis
 func (h *Handler) UploadFirmware(c *gin.Context) {
+	// Log request details for debugging
+	log.Printf("Upload request from %s - Content-Type: %s", c.ClientIP(), c.GetHeader("Content-Type"))
+	log.Printf("Request headers: %+v", c.Request.Header)
+	
 	// Parse multipart form
 	err := c.Request.ParseMultipartForm(h.config.MaxFileSize)
 	if err != nil {
+		log.Printf("Failed to parse multipart form: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "Failed to parse form",
 			"message": err.Error(),
@@ -52,9 +57,14 @@ func (h *Handler) UploadFirmware(c *gin.Context) {
 		return
 	}
 
+	// Log form fields for debugging
+	log.Printf("Form fields: %+v", c.Request.Form)
+	log.Printf("Multipart form: %+v", c.Request.MultipartForm)
+	
 	// Get file from form
 	file, header, err := c.Request.FormFile("firmware_file")
 	if err != nil {
+		log.Printf("Failed to get firmware_file from form: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "No firmware file provided",
 			"message": "Please provide a firmware file",
@@ -149,6 +159,8 @@ func (h *Handler) UploadFirmware(c *gin.Context) {
 		DeviceModel: c.Request.FormValue("device_model"),
 		DeviceVersion: c.Request.FormValue("device_version"),
 		Manufacturer: c.Request.FormValue("manufacturer"),
+		FirmwareInfo: make(map[string]interface{}),
+		ExtractionResults: make(map[string]interface{}),
 	}
 
 	// Save project to database
