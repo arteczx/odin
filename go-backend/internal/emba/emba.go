@@ -1,11 +1,12 @@
 package emba
 
 import (
+	"bufio"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -33,9 +34,9 @@ type ParsedResults struct {
 	Findings       []models.Finding       `json:"findings"`
 	CVEs           []models.CVEFinding    `json:"cves"`
 	OSINTResults   []models.OSINTResult   `json:"osint_results"`
-	FileInfo       map[string]interface{} `json:"file_info"`
-	ExtractionInfo map[string]interface{} `json:"extraction_info"`
-	Summary        map[string]interface{} `json:"summary"`
+	FileInfo       string                 `json:"file_info"`
+	ExtractionInfo string                 `json:"extraction_info"`
+	Summary        string                 `json:"summary"`
 }
 
 // NewService creates a new EMBA service instance
@@ -126,10 +127,12 @@ func (s *Service) AnalyzeFirmware(firmwarePath, jobID string) (*AnalysisResult, 
 	if err != nil {
 		log.Printf("Failed to parse EMBA results for job %s: %v", jobID, err)
 		// Don't fail completely, return partial results
+		errorData := map[string]interface{}{
+			"parse_error": err.Error(),
+		}
+		errorJSON, _ := json.Marshal(errorData)
 		results = &ParsedResults{
-			Summary: map[string]interface{}{
-				"parse_error": err.Error(),
-			},
+			Summary: string(errorJSON),
 		}
 	}
 
@@ -151,9 +154,9 @@ func (s *Service) parseEMBAResults(logDir, jobID string) (*ParsedResults, error)
 		Findings:       []models.Finding{},
 		CVEs:          []models.CVEFinding{},
 		OSINTResults:  []models.OSINTResult{},
-		FileInfo:      make(map[string]interface{}),
-		ExtractionInfo: make(map[string]interface{}),
-		Summary:       make(map[string]interface{}),
+		FileInfo:      "{}",
+		ExtractionInfo: "{}",
+		Summary:       "{}",
 	}
 
 	// Look for EMBA specific output files
@@ -202,19 +205,16 @@ func (s *Service) parseEMBAResults(logDir, jobID string) (*ParsedResults, error)
 	// Parse advanced extraction modules
 	s.parseAdvancedExtractionModules(logDir, results)
 
-	// Generate summary based on parsed data
-	results.Summary = map[string]interface{}{
+	// Generate summary based on parsed data - convert to JSON string
+	summaryData := map[string]interface{}{
 		"total_findings":    len(results.Findings),
 		"total_cves":       len(results.CVEs),
 		"total_osint":      len(results.OSINTResults),
-		"critical_count":   s.countBySeverity(results.Findings, results.CVEs, "critical"),
-		"high_count":       s.countBySeverity(results.Findings, results.CVEs, "high"),
-		"medium_count":     s.countBySeverity(results.Findings, results.CVEs, "medium"),
-		"low_count":        s.countBySeverity(results.Findings, results.CVEs, "low"),
-		"analysis_time":    time.Now().UTC().Format(time.RFC3339),
-		"emba_version":     s.getEMBAVersion(),
+		"analysis_modules": []string{"P", "S", "L", "F"},
 		"log_directory":    logDir,
 	}
+	summaryJSON, _ := json.Marshal(summaryData)
+	results.Summary = string(summaryJSON)
 
 	return results, nil
 }
@@ -244,7 +244,7 @@ func (s *Service) parseGrepLog(grepLogFile string, results *ParsedResults) error
 				Severity:        models.RiskLevel(s.determineSeverity(line)),
 				Type:            models.FindingType("security"),
 				FilePath:        s.extractLocation(line),
-				FindingMetadata: map[string]interface{}{"raw_line": line},
+				FindingMetadata: `{"raw_line": "` + strings.ReplaceAll(line, `"`, `\"`) + `"}`,
 			}
 			results.Findings = append(results.Findings, finding)
 		}
@@ -365,7 +365,7 @@ func (s *Service) parseModuleFile(filePath string, results *ParsedResults) error
 				Severity:        models.RiskLevel(s.determineSeverity(line)),
 				Type:            models.FindingType(s.getCategoryFromModule(moduleName)),
 				FilePath:        filePath,
-				FindingMetadata: map[string]interface{}{"module": moduleName, "raw_line": line},
+				FindingMetadata: `{"module": "` + moduleName + `", "raw_line": "` + strings.ReplaceAll(line, `"`, `\"`) + `"}`,
 			}
 			results.Findings = append(results.Findings, finding)
 		}
@@ -403,7 +403,7 @@ func (s *Service) parseVulnerabilityCSV(csvFile string) ([]models.Finding, error
 				Severity:        models.RiskLevel(s.normalizeSeverity(s.cleanCSVField(fields[2]))),
 				Type:            models.FindingType("vulnerability"),
 				FilePath:        csvFile,
-				FindingMetadata: map[string]interface{}{"csv_source": csvFile},
+				FindingMetadata: `{"csv_source": "` + csvFile + `"}`,
 			}
 			findings = append(findings, finding)
 		}
@@ -481,7 +481,7 @@ func (s *Service) parseVulnerabilityFile(vulnFile string) ([]models.Finding, err
 				FilePath:        vulnFile,
 				LineNumber:      i + 1,
 				Content:         line,
-				FindingMetadata: map[string]interface{}{"source": "vulnerability_file"},
+				FindingMetadata: `{"source": "vulnerability_file"}`,
 			}
 			findings = append(findings, finding)
 		}
@@ -585,7 +585,7 @@ func (s *Service) mapJSONToFinding(jsonFinding map[string]interface{}) models.Fi
 	finding := models.Finding{
 		Type:            models.FindingType("security_issue"),
 		Severity:        models.RiskLevel("low"),
-		FindingMetadata: map[string]interface{}{"category": "emba_json"},
+		FindingMetadata: `{"category": "emba_json"}`,
 	}
 
 	if title, ok := jsonFinding["title"].(string); ok {
@@ -727,10 +727,7 @@ func (s *Service) parseEmulationResults(logDir string, results *ParsedResults) e
 					Description:     line,
 					Severity:        models.RiskLevel("low"),
 					FilePath:        emulationFile,
-					FindingMetadata: map[string]interface{}{
-						"source": "emulation",
-						"module": "S115",
-					},
+					FindingMetadata: `{"source": "emulation", "module": "S115"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -778,10 +775,7 @@ func (s *Service) parseCWECheckerResults(logDir string, results *ParsedResults) 
 					Description:     line,
 					Severity:        models.RiskLevel(severity),
 					FilePath:        cweFile,
-					FindingMetadata: map[string]interface{}{
-						"source": "cwe_checker",
-						"module": "S120",
-					},
+					FindingMetadata: `{"source": "cwe_checker", "module": "S120"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -860,11 +854,7 @@ func (s *Service) parseSystemEmulationResults(logDir string, results *ParsedResu
 					Description: line,
 					Severity:    models.RiskLevel("info"),
 					FilePath:    l10File,
-					FindingMetadata: map[string]interface{}{
-						"source":          "system_emulation",
-						"module":          "L10",
-						"emulation_data":  emulationData,
-					},
+					FindingMetadata: `{"source": "system_emulation", "module": "L10"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -887,11 +877,7 @@ func (s *Service) parseSystemEmulationResults(logDir string, results *ParsedResu
 					Description: line,
 					Severity:    models.RiskLevel("low"),
 					FilePath:    l10File,
-					FindingMetadata: map[string]interface{}{
-						"source":       "system_emulation",
-						"module":       "L10",
-						"service_name": serviceName,
-					},
+					FindingMetadata: `{"source": "system_emulation", "module": "L10", "service_name": "` + serviceName + `"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -950,11 +936,7 @@ func (s *Service) parseNetworkScanResults(logDir string, results *ParsedResults)
 						Description: line,
 						Severity:    models.RiskLevel(severity),
 						FilePath:    l15File,
-						FindingMetadata: map[string]interface{}{
-							"source":    "network_scan",
-							"module":    "L15",
-							"port_info": portInfo,
-						},
+						FindingMetadata: `{"source": "network_scan", "module": "L15", "port": "` + port + `", "protocol": "` + protocol + `"}`,
 					}
 					results.Findings = append(results.Findings, finding)
 				}
@@ -970,10 +952,7 @@ func (s *Service) parseNetworkScanResults(logDir string, results *ParsedResults)
 					Description: line,
 					Severity:    models.RiskLevel("info"),
 					FilePath:    l15File,
-					FindingMetadata: map[string]interface{}{
-						"source": "network_scan",
-						"module": "L15",
-					},
+					FindingMetadata: `{"source": "network_scan", "module": "L15", "tool": "nmap"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -988,20 +967,27 @@ func (s *Service) parseNetworkScanResults(logDir string, results *ParsedResults)
 					Description: line,
 					Severity:    models.RiskLevel("info"),
 					FilePath:    l15File,
-					FindingMetadata: map[string]interface{}{
-						"source": "network_scan",
-						"module": "L15",
-					},
+					FindingMetadata: `{"source": "network_scan", "module": "L15", "tool": "nmap"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
 		}
 
-		// Store network scan summary
-		results.Summary["network_scan"] = map[string]interface{}{
+		// Store network scan summary - convert to JSON string
+		networkData := map[string]interface{}{
 			"open_ports":    openPorts,
 			"total_ports":   len(openPorts),
 		}
+		networkJSON, _ := json.Marshal(networkData)
+		// Parse existing summary and add network data
+		var summaryMap map[string]interface{}
+		json.Unmarshal([]byte(results.Summary), &summaryMap)
+		if summaryMap == nil {
+			summaryMap = make(map[string]interface{})
+		}
+		summaryMap["network_scan"] = networkData
+		updatedSummary, _ := json.Marshal(summaryMap)
+		results.Summary = string(updatedSummary)
 	}
 
 	return nil
@@ -1046,10 +1032,7 @@ func (s *Service) parseSNMPCheckResults(logDir string, results *ParsedResults) e
 					Description: line,
 					Severity:    models.RiskLevel(severity),
 					FilePath:    l20File,
-					FindingMetadata: map[string]interface{}{
-						"source": "snmp_check",
-						"module": "L20",
-					},
+					FindingMetadata: `{"source": "snmp_check", "module": "L20", "tool": "snmp"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -1065,10 +1048,7 @@ func (s *Service) parseSNMPCheckResults(logDir string, results *ParsedResults) e
 					Description: line,
 					Severity:    models.RiskLevel("info"),
 					FilePath:    l20File,
-					FindingMetadata: map[string]interface{}{
-						"source": "snmp_check",
-						"module": "L20",
-					},
+					FindingMetadata: `{"source": "snmp_check", "module": "L20", "tool": "snmp"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -1110,10 +1090,7 @@ func (s *Service) parseUPnPHNAPResults(logDir string, results *ParsedResults) er
 					Description: line,
 					Severity:    models.RiskLevel("medium"),
 					FilePath:    l22File,
-					FindingMetadata: map[string]interface{}{
-						"source": "upnp_check",
-						"module": "L22",
-					},
+					FindingMetadata: `{"source": "upnp_check", "module": "L22", "tool": "upnp"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -1129,10 +1106,7 @@ func (s *Service) parseUPnPHNAPResults(logDir string, results *ParsedResults) er
 					Description: line,
 					Severity:    models.RiskLevel("high"),
 					FilePath:    l22File,
-					FindingMetadata: map[string]interface{}{
-						"source": "upnp_check",
-						"module": "L22",
-					},
+					FindingMetadata: `{"source": "upnp_check", "module": "L22", "tool": "hnap"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -1181,10 +1155,7 @@ func (s *Service) parseVNCCheckResults(logDir string, results *ParsedResults) er
 					Description: line,
 					Severity:    models.RiskLevel(severity),
 					FilePath:    l23File,
-					FindingMetadata: map[string]interface{}{
-						"source": "vnc_check",
-						"module": "L23",
-					},
+					FindingMetadata: `{"source": "vnc_check", "module": "L23", "tool": "vnc"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -1228,11 +1199,7 @@ func (s *Service) parseWebCheckResults(logDir string, results *ParsedResults) er
 					Description: line,
 					Severity:    models.RiskLevel(s.determineSeverity(line)),
 					FilePath:    l25File,
-					FindingMetadata: map[string]interface{}{
-						"source": "web_check",
-						"module": "L25",
-						"tool":   "nikto",
-					},
+					FindingMetadata: `{"source": "web_check", "module": "L25", "tool": "nikto"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -1249,11 +1216,7 @@ func (s *Service) parseWebCheckResults(logDir string, results *ParsedResults) er
 					Description: line,
 					Severity:    models.RiskLevel(s.determineSeverity(line)),
 					FilePath:    l25File,
-					FindingMetadata: map[string]interface{}{
-						"source": "web_check",
-						"module": "L25",
-						"tool":   "testssl",
-					},
+					FindingMetadata: `{"source": "web_check", "module": "L25", "tool": "testssl"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -1269,11 +1232,7 @@ func (s *Service) parseWebCheckResults(logDir string, results *ParsedResults) er
 					Description: line,
 					Severity:    models.RiskLevel(s.determineSeverity(line)),
 					FilePath:    l25File,
-					FindingMetadata: map[string]interface{}{
-						"source": "web_check",
-						"module": "L25",
-						"tool":   "arachni",
-					},
+					FindingMetadata: `{"source": "web_check", "module": "L25", "tool": "arachni"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -1330,12 +1289,7 @@ func (s *Service) parseSBOMData(logDir string, results *ParsedResults) error {
 							Description: fmt.Sprintf("Component: %s, Version: %s", name, version),
 							Severity:    models.RiskLevel("low"),
 							FilePath:    sbomFile,
-							FindingMetadata: map[string]interface{}{
-								"source":    "sbom",
-								"module":    "F15",
-								"component": name,
-								"version":   version,
-							},
+							FindingMetadata: `{"source": "sbom", "module": "F15", "component": "` + name + `", "version": "` + version + `"}`,
 						}
 						results.Findings = append(results.Findings, finding)
 					}
@@ -1349,20 +1303,6 @@ func (s *Service) parseSBOMData(logDir string, results *ParsedResults) error {
 	}
 
 	return nil
-}
-
-// extractCWETitle extracts a meaningful title from CWE-checker output
-func (s *Service) extractCWETitle(line string) string {
-	// Extract CWE ID and description
-	cwePattern := `CWE-\d+`
-	re := regexp.MustCompile(cwePattern)
-	matches := re.FindStringSubmatch(line)
-	
-	if len(matches) > 0 {
-		return fmt.Sprintf("CWE Finding: %s", matches[0])
-	}
-	
-	return "CWE Finding"
 }
 
 // parseAdvancedExtractionModules parses results from advanced extraction modules
@@ -1412,10 +1352,7 @@ func (s *Service) parsePreModules(logDir string, results *ParsedResults) error {
 					Description: line,
 					Severity:    models.RiskLevel("info"),
 					FilePath:    preModuleFile,
-					FindingMetadata: map[string]interface{}{
-						"source": "pre_analysis",
-						"module": filepath.Base(preModuleFile),
-					},
+					FindingMetadata: `{"source": "pre_analysis", "module": "` + filepath.Base(preModuleFile) + `"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -1464,10 +1401,7 @@ func (s *Service) parseStaticAnalysisModules(logDir string, results *ParsedResul
 					Description: line,
 					Severity:    models.RiskLevel("medium"),
 					FilePath:    staticModuleFile,
-					FindingMetadata: map[string]interface{}{
-						"source": "static_analysis",
-						"module": filepath.Base(staticModuleFile),
-					},
+					FindingMetadata: `{"source": "static_analysis", "module": "` + filepath.Base(staticModuleFile) + `"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -1483,10 +1417,7 @@ func (s *Service) parseStaticAnalysisModules(logDir string, results *ParsedResul
 					Description: line,
 					Severity:    models.RiskLevel("low"),
 					FilePath:    staticModuleFile,
-					FindingMetadata: map[string]interface{}{
-						"source": "static_analysis",
-						"module": filepath.Base(staticModuleFile),
-					},
+					FindingMetadata: `{"source": "static_analysis", "module": "` + filepath.Base(staticModuleFile) + `"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -1534,10 +1465,7 @@ func (s *Service) parseFinishingModules(logDir string, results *ParsedResults) e
 					Description: line,
 					Severity:    models.RiskLevel("info"),
 					FilePath:    finishingModuleFile,
-					FindingMetadata: map[string]interface{}{
-						"source": "finishing_analysis",
-						"module": filepath.Base(finishingModuleFile),
-					},
+					FindingMetadata: `{"source": "finishing_analysis", "module": "` + filepath.Base(finishingModuleFile) + `"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -1554,10 +1482,7 @@ func (s *Service) parseFinishingModules(logDir string, results *ParsedResults) e
 					Description: line,
 					Severity:    models.RiskLevel(severity),
 					FilePath:    finishingModuleFile,
-					FindingMetadata: map[string]interface{}{
-						"source": "finishing_analysis",
-						"module": filepath.Base(finishingModuleFile),
-					},
+					FindingMetadata: `{"source": "finishing_analysis", "module": "` + filepath.Base(finishingModuleFile) + `"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
