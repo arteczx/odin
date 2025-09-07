@@ -6,8 +6,8 @@
 set -e
 
 # Load configuration
-if [ -f "config.env" ]; then
-    source config.env
+if [ -f "../config.env" ]; then
+    source ../config.env
 else
     echo "Error: config.env not found. Please create it from config.env.example"
     exit 1
@@ -26,14 +26,14 @@ echo "Frontend Port: $FRONTEND_PORT"
 
 # Update frontend .env for production
 echo "📝 Updating frontend configuration..."
-cat > frontend/.env << EOF
+cat > ../frontend/.env << EOF
 REACT_APP_API_URL=http://${VPS_IP}:${SERVER_PORT}
 REACT_APP_WS_URL=ws://${VPS_IP}:${SERVER_PORT}/ws
 EOF
 
 # Update backend .env for production
 echo "📝 Updating backend configuration..."
-cat > go-backend/.env << EOF
+cat > ../go-backend/.env << EOF
 SERVER_HOST=${SERVER_HOST}
 SERVER_PORT=${SERVER_PORT}
 DATABASE_PATH=${DATABASE_PATH}
