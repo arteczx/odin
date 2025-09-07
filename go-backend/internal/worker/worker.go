@@ -31,8 +31,8 @@ func New(db *gorm.DB, cfg *config.Config) *Worker {
 func (w *Worker) ProcessPendingJobs() error {
 	var projects []models.Project
 	
-	// Find projects that are pending analysis
-	if err := w.db.Where("status = ?", models.StatusPending).Find(&projects).Error; err != nil {
+	// Find projects that are pending analysis (both pending and uploading status)
+	if err := w.db.Where("status IN (?)", []models.ProjectStatus{models.StatusPending, models.StatusUploading}).Find(&projects).Error; err != nil {
 		return fmt.Errorf("failed to query pending projects: %w", err)
 	}
 
