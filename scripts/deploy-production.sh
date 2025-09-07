@@ -34,15 +34,33 @@ EOF
 # Update backend .env for production
 echo "📝 Updating backend configuration..."
 cat > ../go-backend/.env << EOF
-SERVER_HOST=${SERVER_HOST}
-SERVER_PORT=${SERVER_PORT}
+# Database Configuration (SQLite)
 DATABASE_PATH=${DATABASE_PATH}
+
+# Server Configuration
+SERVER_PORT=${SERVER_PORT}
+SERVER_HOST=${SERVER_HOST}
+
+# File Upload Configuration
 UPLOAD_DIR=${UPLOAD_DIR}
 WORK_DIR=${WORK_DIR}
 MAX_FILE_SIZE=${MAX_FILE_SIZE}
+
+# EMBA Configuration
 EMBA_PATH=${EMBA_PATH}
 EMBA_LOG_DIR=${EMBA_LOG_DIR}
-EMBA_PROFILES_DIR=${EMBA_PROFILES_DIR}
+EMBA_ENABLE_EMULATION=false
+EMBA_ENABLE_CWE_CHECK=false
+EMBA_ENABLE_LIVE_TESTING=false
+EMBA_SCAN_PROFILE=default-scan.emba
+EMBA_THREADS=2
+
+# Supported file extensions
+SUPPORTED_EXTENSIONS=.bin,.img,.hex,.rom,.fw
+
+# External APIs (Optional)
+SHODAN_API_KEY=
+VIRUSTOTAL_API_KEY=
 EOF
 
 echo "✅ Production configuration complete!"
