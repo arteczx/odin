@@ -1,12 +1,11 @@
 package emba
 
 import (
-	"bufio"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -200,7 +199,12 @@ func (s *Service) parseEMBAResults(logDir, jobID string) (*ParsedResults, error)
 	}
 	
 	// Parse SBOM data (F15 module)
-	s.parseSBOMData(logDir, results)
+	sbomFiles, err := filepath.Glob(filepath.Join(logDir, "sbom_*.json"))
+	if err == nil {
+		for _, sbomFile := range sbomFiles {
+			s.parseSBOMData(sbomFile, results)
+		}
+	}
 	
 	// Parse advanced extraction modules
 	s.parseAdvancedExtractionModules(logDir, results)
@@ -217,6 +221,16 @@ func (s *Service) parseEMBAResults(logDir, jobID string) (*ParsedResults, error)
 	results.Summary = string(summaryJSON)
 
 	return results, nil
+}
+
+// extractCWE extracts CWE identifier from a line of text
+func (s *Service) extractCWE(line string) string {
+	re := regexp.MustCompile(`CWE-(\d+)`)
+	matches := re.FindStringSubmatch(line)
+	if len(matches) > 1 {
+		return "CWE-" + matches[1]
+	}
+	return ""
 }
 
 // parseGrepLog parses the grep-able log file created by EMBA -g flag
@@ -279,7 +293,7 @@ func (s *Service) parseModuleReports(logDir string, results *ParsedResults) erro
 	moduleFiles := []string{
 		"S116_qemu_version_check.txt",
 		"S115_usermode_emulator.txt", 
-		"S120_cve_search.txt",
+		"S120_cwe_search.txt",
 		"S25_kernel_check.txt",
 		"S40_weak_perm_check.txt",
 	}
@@ -721,6 +735,7 @@ func (s *Service) parseEmulationResults(logDir string, results *ParsedResults) e
 
 			// Parse version information from emulation output
 			if strings.Contains(line, "version") || strings.Contains(line, "Version") {
+				
 				finding := models.Finding{
 					Type:            models.FindingType("version_detection"),
 					Title:           "Version detected via emulation",
@@ -771,7 +786,7 @@ func (s *Service) parseCWECheckerResults(logDir string, results *ParsedResults) 
 
 				finding := models.Finding{
 					Type:            models.FindingType("cwe_finding"),
-					Title:           s.extractCWETitle(line),
+					CWE:             s.extractCWE(line),
 					Description:     line,
 					Severity:        models.RiskLevel(severity),
 					FilePath:        cweFile,
@@ -883,8 +898,17 @@ func (s *Service) parseSystemEmulationResults(logDir string, results *ParsedResu
 			}
 		}
 
-		// Store emulation summary
-		results.Summary["system_emulation"] = emulationData
+		// Store emulation summary - convert to JSON string
+		emulationJSON, _ := json.Marshal(emulationData)
+		// Parse existing summary and add emulation data
+		var summaryMap map[string]interface{}
+		json.Unmarshal([]byte(results.Summary), &summaryMap)
+		if summaryMap == nil {
+			summaryMap = make(map[string]interface{})
+		}
+		summaryMap["system_emulation"] = emulationData
+		updatedSummary, _ := json.Marshal(summaryMap)
+		results.Summary = string(updatedSummary)
 	}
 
 	return nil
@@ -978,7 +1002,7 @@ func (s *Service) parseNetworkScanResults(logDir string, results *ParsedResults)
 			"open_ports":    openPorts,
 			"total_ports":   len(openPorts),
 		}
-		networkJSON, _ := json.Marshal(networkData)
+		_ = networkData // networkData is used in summaryMap assignment below
 		// Parse existing summary and add network data
 		var summaryMap map[string]interface{}
 		json.Unmarshal([]byte(results.Summary), &summaryMap)
@@ -1297,8 +1321,20 @@ func (s *Service) parseSBOMData(logDir string, results *ParsedResults) error {
 			}
 		}
 
-		// Store SBOM data in summary
-		results.Summary["sbom_data"] = sbomData
+		// Store SBOM summary - convert to JSON string
+		sbomSummary := map[string]interface{}{
+			"total_components": len(results.OSINTResults),
+			"sbom_files":       len(sbomFiles),
+		}
+		// Parse existing summary and add SBOM data
+		var summaryMap map[string]interface{}
+		json.Unmarshal([]byte(results.Summary), &summaryMap)
+		if summaryMap == nil {
+			summaryMap = make(map[string]interface{})
+		}
+		summaryMap["sbom_data"] = sbomSummary
+		updatedSummary, _ := json.Marshal(summaryMap)
+		results.Summary = string(updatedSummary)
 		break // Only process the first SBOM file found
 	}
 
