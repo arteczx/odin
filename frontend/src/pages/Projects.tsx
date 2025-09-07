@@ -60,10 +60,18 @@ const Projects: React.FC = () => {
       setLoading(true);
       setError(null);
       const data = await projectsApi.getProjects();
-      setProjects(data);
+      // Ensure data is an array
+      if (Array.isArray(data)) {
+        setProjects(data);
+      } else {
+        console.error('API returned non-array data:', data);
+        setProjects([]);
+        setError('Invalid data format received from server.');
+      }
     } catch (err) {
       console.error('Error fetching projects:', err);
       setError('Failed to load projects. Please try again.');
+      setProjects([]); // Ensure projects is always an array
     } finally {
       setLoading(false);
     }
@@ -78,7 +86,7 @@ const Projects: React.FC = () => {
 
     try {
       await projectsApi.deleteProject(projectToDelete.id);
-      setProjects(projects.filter(p => p.id !== projectToDelete.id));
+      setProjects(Array.isArray(projects) ? projects.filter(p => p.id !== projectToDelete.id) : []);
       setDeleteDialogOpen(false);
       setProjectToDelete(null);
     } catch (error) {
@@ -86,12 +94,12 @@ const Projects: React.FC = () => {
     }
   };
 
-  const filteredProjects = projects.filter(project =>
+  const filteredProjects = Array.isArray(projects) ? projects.filter(project =>
     project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     project.filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (project.manufacturer && project.manufacturer.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (project.model && project.model.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  ) : [];
 
   const getStatusColor = (status: string) => {
     switch (status) {
