@@ -784,13 +784,18 @@ func (s *Service) parseCWECheckerResults(logDir string, results *ParsedResults) 
 					severity = "critical"
 				}
 
+				cweID := s.extractCWE(line)
+				title := "CWE Finding"
+				if cweID != "" {
+					title = fmt.Sprintf("CWE Finding: %s", cweID)
+				}
 				finding := models.Finding{
 					Type:            models.FindingType("cwe_finding"),
-					CWE:             s.extractCWE(line),
+					Title:           title,
 					Description:     line,
 					Severity:        models.RiskLevel(severity),
 					FilePath:        cweFile,
-					FindingMetadata: `{"source": "cwe_checker", "module": "S120"}`,
+					FindingMetadata: `{"source": "cwe_checker", "module": "S120", "cwe_id": "` + cweID + `"}`,
 				}
 				results.Findings = append(results.Findings, finding)
 			}
@@ -899,7 +904,7 @@ func (s *Service) parseSystemEmulationResults(logDir string, results *ParsedResu
 		}
 
 		// Store emulation summary - convert to JSON string
-		emulationJSON, _ := json.Marshal(emulationData)
+		_ = emulationData // emulationData is used in summaryMap assignment below
 		// Parse existing summary and add emulation data
 		var summaryMap map[string]interface{}
 		json.Unmarshal([]byte(results.Summary), &summaryMap)
