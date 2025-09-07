@@ -364,10 +364,8 @@ func (h *Handler) ListProjects(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"projects": projects,
-		"count":    len(projects),
-	})
+	// Return projects array directly for frontend compatibility
+	c.JSON(http.StatusOK, projects)
 }
 
 // GetProject returns a specific project (for compatibility)
