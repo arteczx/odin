@@ -21,6 +21,7 @@ HEALTH_CHECK_INTERVAL=5
 
 # PID file locations
 BACKEND_PID_FILE="/tmp/odin_backend.pid"
+WORKER_PID_FILE="/tmp/odin_worker.pid"
 FRONTEND_PID_FILE="/tmp/odin_frontend.pid"
 
 # Logging functions
@@ -105,6 +106,14 @@ stop_services() {
         rm -f "$BACKEND_PID_FILE"
     fi
     
+    # Stop worker
+    if is_service_running "$WORKER_PID_FILE"; then
+        local worker_pid=$(cat "$WORKER_PID_FILE")
+        log_info "Stopping worker (PID: $worker_pid)..."
+        kill "$worker_pid" 2>/dev/null || true
+        rm -f "$WORKER_PID_FILE"
+    fi
+    
     # Stop frontend
     if is_service_running "$FRONTEND_PID_FILE"; then
         local frontend_pid=$(cat "$FRONTEND_PID_FILE")
@@ -116,7 +125,9 @@ stop_services() {
     # Kill any remaining processes
     pkill -f "npm start" 2>/dev/null || true
     pkill -f "./build/server" 2>/dev/null || true
+    pkill -f "./build/worker" 2>/dev/null || true
     pkill -f "go run.*server" 2>/dev/null || true
+    pkill -f "go run.*worker" 2>/dev/null || true
     
     sleep 2
     log_success "Existing services stopped"
@@ -146,9 +157,9 @@ start_backend() {
     
     cd go-backend
     
-    # Check if binary exists
-    if [[ ! -f "build/server" ]]; then
-        log_info "Backend binary not found, building..."
+    # Check if binaries exist
+    if [[ ! -f "build/server" ]] || [[ ! -f "build/worker" ]]; then
+        log_info "Backend binaries not found, building..."
         make build
     fi
     
@@ -173,6 +184,24 @@ start_backend() {
         cat /tmp/odin_backend.log
         exit 1
     fi
+    
+    cd ..
+}
+
+# Start Go worker
+start_worker() {
+    log_step "Starting Go worker..."
+    
+    cd go-backend
+    
+    # Start worker
+    log_info "Starting EMBA analysis worker..."
+    nohup ./build/worker > /tmp/odin_worker.log 2>&1 &
+    local worker_pid=$!
+    echo $worker_pid > "$WORKER_PID_FILE"
+    
+    log_success "Worker started successfully (PID: $worker_pid)"
+    log_info "Worker logs: tail -f /tmp/odin_worker.log"
     
     cd ..
 }
@@ -274,6 +303,12 @@ show_status() {
         echo -e "   Backend:  ${RED}Stopped${NC}"
     fi
     
+    if is_service_running "$WORKER_PID_FILE"; then
+        echo -e "   Worker:   ${GREEN}Running${NC} (PID: $(cat $WORKER_PID_FILE))"
+    else
+        echo -e "   Worker:   ${RED}Stopped${NC}"
+    fi
+    
     if is_service_running "$FRONTEND_PID_FILE"; then
         echo -e "   Frontend: ${GREEN}Running${NC} (PID: $(cat $FRONTEND_PID_FILE))"
     else
@@ -285,6 +320,7 @@ show_status() {
     echo -e "${GREEN}🎮 Control Commands:${NC}"
     echo -e "   Stop services:      ${CYAN}./stop.sh${NC}"
     echo -e "   View backend logs:  ${CYAN}tail -f /tmp/odin_backend.log${NC}"
+    echo -e "   View worker logs:   ${CYAN}tail -f /tmp/odin_worker.log${NC}"
     echo -e "   View frontend logs: ${CYAN}tail -f /tmp/odin_frontend.log${NC}"
     echo -e "   Service status:     ${CYAN}./status.sh${NC}"
     echo ""
@@ -325,6 +361,7 @@ main() {
     
     # Start application services
     start_backend
+    start_worker
     start_frontend
     
     # Perform health checks
