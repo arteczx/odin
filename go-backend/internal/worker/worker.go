@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"odin-backend/internal/config"
@@ -96,11 +97,19 @@ func (w *Worker) updateProjectStatus(project *models.Project, status models.Proj
 	project.Status = status
 	
 	// Update extraction results with status message
-	if project.ExtractionResults == nil {
-		project.ExtractionResults = make(map[string]interface{})
+	var extractionResults map[string]interface{}
+	if project.ExtractionResults == "" || project.ExtractionResults == "{}" {
+		extractionResults = make(map[string]interface{})
+	} else {
+		json.Unmarshal([]byte(project.ExtractionResults), &extractionResults)
+		if extractionResults == nil {
+			extractionResults = make(map[string]interface{})
+		}
 	}
-	project.ExtractionResults["status_message"] = message
-	project.ExtractionResults["last_updated"] = time.Now().UTC()
+	extractionResults["status_message"] = message
+	extractionResults["last_updated"] = time.Now().UTC().Format(time.RFC3339)
+	updatedJSON, _ := json.Marshal(extractionResults)
+	project.ExtractionResults = string(updatedJSON)
 
 	return w.db.Save(project).Error
 }
@@ -172,7 +181,7 @@ func (w *Worker) saveAnalysisResults(project *models.Project, result *emba.Analy
 	}
 
 	// Update project with EMBA results
-	project.ExtractionResults = map[string]interface{}{
+	extractionData := map[string]interface{}{
 		"emba_log_dir":    result.LogDir,
 		"analysis_time":   result.AnalysisTime,
 		"file_info":       result.Results.FileInfo,
@@ -180,9 +189,11 @@ func (w *Worker) saveAnalysisResults(project *models.Project, result *emba.Analy
 		"emba_stdout":     result.Stdout,
 		"success":         result.Success,
 	}
+	extractionJSON, _ := json.Marshal(extractionData)
+	project.ExtractionResults = string(extractionJSON)
 
 	// Update firmware info if available
-	if result.Results.FileInfo != nil {
+	if result.Results.FileInfo != "" && result.Results.FileInfo != "{}" {
 		project.FirmwareInfo = result.Results.FileInfo
 	}
 
